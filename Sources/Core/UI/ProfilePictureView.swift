@@ -161,7 +161,7 @@ public class ProfilePictureView: UIView {
    be used to trigger a manual update of the image if it needs to be re-downloaded.
    */
   public func setNeedsImageUpdate() {
-    DispatchQueue.main.async { [weak self] in
+    executeOnMainThread { [weak self] in
       guard let self = self,
         !self.bounds.isEmpty else {
         return
@@ -230,12 +230,11 @@ public class ProfilePictureView: UIView {
       case let .failure(error):
         self?.hasProfileImage = false
         self?.placeholderImageIsValid = false
-        self?.setNeedsImageUpdate()
         self?.logger.log(.networkRequests, error.localizedDescription)
 
       case let .success(image):
         self?.hasProfileImage = true
-        DispatchQueue.main.async {
+        self?.executeOnMainThread {
           self?.imageView.image = image
         }
       }
@@ -249,8 +248,19 @@ public class ProfilePictureView: UIView {
       size: imageView.bounds.size,
       color: HumanSilhouetteIcon.placeholderImageColor
     )
-    DispatchQueue.main.async { [imageView] in
+    executeOnMainThread { [imageView] in
       imageView.image = placeholderImage
+    }
+  }
+
+  // Ensures that we are not dispatching to the main thread if we are already on the main thread
+  // Credit for this idea to https://www.swiftbysundell.com/posts/reducing-flakiness-in-swift-tests
+  // This allows us to have deterministic unit testing around UI code
+  private func executeOnMainThread(using closure: @escaping () -> Void) {
+    if Thread.isMainThread {
+      closure()
+    } else {
+      DispatchQueue.main.async(execute: closure)
     }
   }
 }
